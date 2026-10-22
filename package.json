@@ -1,12 +1,12 @@
 {
   "name": "slotmatch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Find shared time slots across people, time zones and panel rules. Local-first, no backend.",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "bun --hot ./index.html",
-    "build": "rm -rf dist && bun build ./index.html --outdir dist --production",
+    "build": "bun scripts/build.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "preview": "bun scripts/preview.ts"

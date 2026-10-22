@@ -49,7 +49,7 @@ export function CoveragePage() {
         <h1>Coverage</h1>
         <div className="empty">
           <p>
-            Add people first, or <a href={href("/data")}>load the demo data</a>.
+            Add people first, or <a href={href("/settings")}>load the demo data</a>.
           </p>
         </div>
       </section>
@@ -176,7 +176,7 @@ export function CoveragePage() {
             <h2 className="h3">Gaps</h2>
             <p className="muted small">
               Under {opts.minStaff} free between {fmtMinutes(dayStartMin)} and {fmtMinutes(dayEndMin)}
-              {opts.weekdaysOnly ? " on weekdays" : ""}. Visible hours are set in <a href={href("/data")}>Data</a>.
+              {opts.weekdaysOnly ? " on weekdays" : ""}. Visible hours are set in <a href={href("/settings")}>Settings</a>.
             </p>
             {view.holes.length ? (
               <ul className="plain-list gaps">

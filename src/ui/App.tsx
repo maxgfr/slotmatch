@@ -1,7 +1,6 @@
 import { CalendarPage } from "./pages/Calendar";
 import { CalendarViewPage } from "./pages/CalendarView";
 import { CoveragePage } from "./pages/Coverage";
-import { DataPage } from "./pages/Data";
 import { ImportPage } from "./pages/Import";
 import { MatchPage } from "./pages/Match";
 import { PeoplePage } from "./pages/People";
@@ -9,8 +8,10 @@ import { PersonEditPage } from "./pages/PersonEdit";
 import { PlannerPage } from "./pages/Planner";
 import { RequestsPage } from "./pages/Requests";
 import { RespondPage } from "./pages/Respond";
+import { SettingsPage } from "./pages/Settings";
 import { href, useRoute } from "./router";
 import { StoreProvider, useStore } from "./state";
+import { applyUpdate, useUpdateStatus } from "./update";
 
 const NAV = [
   { path: "people", label: "People" },
@@ -19,13 +20,14 @@ const NAV = [
   { path: "calendar", label: "Calendar" },
   { path: "planner", label: "Planner" },
   { path: "requests", label: "Requests" },
-  { path: "data", label: "Data" },
+  { path: "settings", label: "Settings" },
 ];
 
 function Shell() {
   const route = useRoute();
   const { state, saved, preservedAs } = useStore();
-  const section = route.path[0] ?? "people";
+  const { status } = useUpdateStatus();
+  const section = route.path[0] === "data" ? "settings" : (route.path[0] ?? "people");
 
   let page;
   switch (section) {
@@ -50,8 +52,9 @@ function Shell() {
     case "import":
       page = <ImportPage key={route.params.get("d") ?? ""} data={route.params.get("d") ?? ""} />;
       break;
-    case "data":
-      page = <DataPage />;
+    case "settings":
+    case "data": // old links
+      page = <SettingsPage />;
       break;
     default:
       page = (
@@ -85,13 +88,22 @@ function Shell() {
             ))}
           </ul>
         </nav>
-        <a className="tz-chip" href={href("/data")} title="Display time zone (change in Data)">
+        <a className="tz-chip" href={href("/settings")} title="Display time zone (change in Settings)">
           {state.settings.timeZone.replace(/_/g, " ")}
         </a>
       </header>
+      {status?.state === "available" && (
+        <p className="banner" role="status">
+          A newer version of slotmatch is online. Your data stays in this browser.{" "}
+          <button className="link" onClick={() => void applyUpdate()}>
+            Update now
+          </button>{" "}
+          · <a href={href("/settings")}>Details</a>
+        </p>
+      )}
       {!saved && (
         <p className="banner warn" role="alert">
-          Changes cannot be saved in this browser (storage is full or blocked). Export a backup from Data.
+          Changes cannot be saved in this browser (storage is full or blocked). Export a backup from Settings.
         </p>
       )}
       {preservedAs && (

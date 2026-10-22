@@ -297,7 +297,7 @@ export function MatchPage() {
         <h1>Match</h1>
         <div className="empty">
           <p>
-            Add people first, or <a href={href("/data")}>load the demo data</a>.
+            Add people first, or <a href={href("/settings")}>load the demo data</a>.
           </p>
         </div>
       </section>

@@ -31,7 +31,10 @@ Live (once published): https://maxgfr.github.io/slotmatch/
   - `EXDATE` and moved occurrences (`RECURRENCE-ID`).
 
   Free and cancelled events are ignored. Export writes standard `VEVENT`s with attendees, and absences as all-day (or, for half days, timed) busy events.
-- **Backup.** JSON export and import (merge or replace), demo data, and reset.
+- **Settings.** Everything in one page (`#/settings`):
+  - **App:** this copy's version, commit and build time, whether a newer version is online, and an **Update now** button that reloads into it (data stays in the browser). A banner also appears on every page when an update is online, and a tab left open checks again when it comes back after 15 minutes.
+  - **Health:** checks the browser (storage, link compression, time zones, clipboard) and runs your own data through every path that reads or writes it: reload, JSON backup, availability, share links and `.ics` export. Nothing is changed.
+  - Display zone and hours, default meeting length, JSON backup (merge or replace), demo data and reset.
 
 ## Asking an outsider for their availability
 
@@ -65,6 +68,7 @@ src/core/   pure TypeScript, no DOM, covered by bun test
   coverage.ts   heatmap and gaps          planner.ts  batch interview planning
   ics.ts        .ics import/export        share.ts    request/answer/calendar links
   calendar.ts   dates, absences, months   store.ts    persistence, migration, backup, demo
+  health.ts     self-test of the data     version.ts  build identity, update check
 src/ui/     React 19: hash router, pages, WeekGrid (mouse, touch and keyboard painting), MonthCalendar
 ```
 
@@ -75,19 +79,25 @@ bun install
 bun run dev          # dev server with hot reload
 bun test             # unit tests
 bun run typecheck    # tsc --noEmit
-bun run build        # production build into dist/ (relative asset paths)
+bun run build        # production build into dist/ (relative asset paths) + dist/version.json
 bun run preview      # serve dist/ under /slotmatch/ like GitHub Pages (PORT=4173)
 bun scripts/preview.ts --check   # start, check index and every asset answer 200, stop
 ```
 
 ## Publish
 
-The workflow `.github/workflows/pages.yml` tests, typechecks, builds and deploys on every push to `main`. It has not been run yet. To publish:
+The workflow `.github/workflows/pages.yml` tests, typechecks, builds and deploys on every push to `main`.
 
-```sh
-gh repo create maxgfr/slotmatch --public --source . --push
-gh api -X POST repos/maxgfr/slotmatch/pages -f build_type=workflow
-```
+`scripts/build.ts` bakes the version from `package.json`, the commit (`GITHUB_SHA` in CI, the local `HEAD` otherwise) and the build time into the app, and writes the same to `dist/version.json`. To check the live site:
+
+- open **Settings** on https://maxgfr.github.io/slotmatch/: *Online* says **Up to date** when the page you run is the deployed one, and *Health* should show every check passed;
+- or compare the deployed commit with `main`:
+
+  ```sh
+  curl -s https://maxgfr.github.io/slotmatch/version.json
+  git rev-parse origin/main
+  gh run list --limit 1   # the deploy for the last push
+  ```
 
 ## Limits
 

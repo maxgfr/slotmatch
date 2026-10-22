@@ -73,7 +73,7 @@ export function PlannerPage() {
         <h1>Planner</h1>
         <div className="empty">
           <p>
-            Add people first, or <a href={href("/data")}>load the demo data</a>.
+            Add people first, or <a href={href("/settings")}>load the demo data</a>.
           </p>
         </div>
       </section>
