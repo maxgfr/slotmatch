@@ -1,3 +1,5 @@
+import { CalendarPage } from "./pages/Calendar";
+import { CalendarViewPage } from "./pages/CalendarView";
 import { CoveragePage } from "./pages/Coverage";
 import { DataPage } from "./pages/Data";
 import { ImportPage } from "./pages/Import";
@@ -14,6 +16,7 @@ const NAV = [
   { path: "people", label: "People" },
   { path: "match", label: "Match" },
   { path: "coverage", label: "Coverage" },
+  { path: "calendar", label: "Calendar" },
   { path: "planner", label: "Planner" },
   { path: "requests", label: "Requests" },
   { path: "data", label: "Data" },
@@ -34,6 +37,9 @@ function Shell() {
       break;
     case "coverage":
       page = <CoveragePage />;
+      break;
+    case "calendar":
+      page = <CalendarPage />;
       break;
     case "planner":
       page = <PlannerPage />;
@@ -105,6 +111,8 @@ function Router() {
   const route = useRoute();
   // The respondent's page stands alone: no navigation, no access to local data.
   if (route.path[0] === "respond") return <RespondPage key={route.params.get("d") ?? ""} data={route.params.get("d") ?? ""} />;
+  // A shared calendar is read-only; local data is only touched if the viewer imports it.
+  if (route.path[0] === "calendar-view") return <CalendarViewPage key={route.params.get("d") ?? ""} data={route.params.get("d") ?? ""} />;
   return <Shell />;
 }
 

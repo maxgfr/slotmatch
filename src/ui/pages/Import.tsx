@@ -70,6 +70,7 @@ export function ImportPage({ data }: { data: string }) {
       weekly: [],
       exceptions: [],
       busy: [],
+      absences: [],
       ...(res.email ? { email: res.email } : {}),
     };
     const person = applyResponse(base, res);

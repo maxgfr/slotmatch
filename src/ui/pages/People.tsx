@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { absentNow } from "../../core/calendar";
 import { localParts } from "../../core/expand";
 import type { Person } from "../../core/model";
 import { demoState } from "../../core/store";
 import { href, navigate } from "../router";
-import { allTags, fmtTime, useStore } from "../state";
+import { allTags, fmtDate, fmtTime, useStore } from "../state";
 
 function weeklyHours(p: Person): number {
   return p.weekly.reduce((s, b) => s + (b.endMin - b.startMin), 0) / 60;
@@ -91,6 +92,7 @@ export function PeoplePage() {
           const local = localParts(now, p.timeZone);
           const hours = weeklyHours(p);
           const answers = p.exceptions.filter((x) => x.kind !== "busy" && x.end > now).length;
+          const away = absentNow(p, now);
           return (
             <li key={p.id}>
               <a className="person-row" href={href(`/people/${p.id}`)}>
@@ -122,6 +124,14 @@ export function PeoplePage() {
                     {hours ? `${hours} h/week` : answers ? `${answers} upcoming time ranges` : "No availability yet"}
                     {p.busy.length ? ` · ${p.busy.length} calendar events` : ""}
                   </span>
+                  {away && (
+                    <span>
+                      <span className={`badge abs-${away.kind}`}>
+                        Away until {fmtDate(away.to)}
+                        {away.toAm ? " noon" : ""}
+                      </span>
+                    </span>
+                  )}
                 </span>
               </a>
             </li>

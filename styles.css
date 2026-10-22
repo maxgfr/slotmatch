@@ -996,6 +996,168 @@ meter {
   border-left: 3px solid var(--warn);
 }
 
+/* ---------- calendar ---------- */
+.abs-vacation {
+  --abs: var(--ok);
+}
+.abs-sick {
+  --abs: var(--danger);
+}
+.abs-other {
+  --abs: var(--warn);
+}
+.badge.abs-vacation,
+.badge.abs-sick,
+.badge.abs-other {
+  background: color-mix(in oklab, var(--abs) 16%, var(--surface));
+  border-color: color-mix(in oklab, var(--abs) 35%, var(--border));
+}
+.abs-swatch {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--abs, var(--accent)) 30%, var(--surface));
+  border-left: 3px solid var(--abs, var(--accent));
+}
+.month-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.month {
+  width: 100%;
+  min-width: 40rem;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.month thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.45rem 0.4rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.month td {
+  vertical-align: top;
+  height: 6.5rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-width: 0 1px 1px 0;
+}
+.month td:last-child {
+  border-right: 0;
+}
+.month tr:last-child td {
+  border-bottom: 0;
+}
+.month td.weekend {
+  background: var(--surface-2);
+}
+.month td.out .month-date {
+  color: var(--border-strong);
+}
+.month td[aria-current="date"] .month-date {
+  background: var(--accent-strong);
+  color: var(--on-accent);
+}
+.month-date {
+  display: inline-block;
+  min-width: 1.6rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+.month-dow {
+  display: none;
+}
+.month-items {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.month-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.month-items li.abs {
+  background: color-mix(in oklab, var(--abs) 16%, var(--surface));
+  border-left: 3px solid var(--abs);
+}
+.month-items li.abs a {
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.month-items li.abs a:hover {
+  text-decoration: underline;
+}
+.month-items .half {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+.month-items li.mtg {
+  display: block;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+}
+.month-items time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.month-none {
+  margin: 0;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .month {
+    min-width: 0;
+  }
+  .month thead {
+    display: none;
+  }
+  .month,
+  .month tbody,
+  .month tr,
+  .month td {
+    display: block;
+  }
+  .month td {
+    height: auto;
+    border-width: 0 0 1px;
+    padding: 0.5rem 0.75rem;
+  }
+  .month td.out,
+  .month td.empty-day:not([aria-current="date"]) {
+    display: none;
+  }
+  .month-dow {
+    display: inline;
+  }
+  .month-items li {
+    font-size: 0.85rem;
+  }
+}
+
 /* ---------- share ---------- */
 .share-box {
   display: flex;

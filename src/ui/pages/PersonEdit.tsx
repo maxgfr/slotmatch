@@ -3,6 +3,7 @@ import { isValidTimeZone, zonedTime } from "../../core/expand";
 import { parseIcs } from "../../core/ics";
 import { DAY, type AvailabilityException, type Person, type WeeklyBlock } from "../../core/model";
 import { newId } from "../../core/store";
+import { AbsenceForm, AbsenceLine } from "../AbsenceForm";
 import { href, navigate } from "../router";
 import { browserTimeZone, fmtSlot, isoDate, parseMinutes, TimeZoneSelect, useStore } from "../state";
 import { WeekGrid, type Cell } from "../WeekGrid";
@@ -45,7 +46,7 @@ function cellsToBlocks(cells: readonly Cell[]): WeeklyBlock[] {
 }
 
 function blankPerson(timeZone: string): Person {
-  return { id: newId(), name: "", kind: "member", tags: [], timeZone, weekly: [], exceptions: [], busy: [] };
+  return { id: newId(), name: "", kind: "member", tags: [], timeZone, weekly: [], exceptions: [], busy: [], absences: [] };
 }
 
 export function PersonEditPage({ id }: { id: string }) {
@@ -113,6 +114,7 @@ export function PersonEditPage({ id }: { id: string }) {
 
   const upcomingBusy = draft.busy.filter((b) => b.end > now).slice(0, 6);
   const exceptions = [...draft.exceptions].sort((a, b) => a.start - b.start);
+  const absences = [...draft.absences].sort((a, b) => a.from.localeCompare(b.from));
 
   return (
     <section className="page">
@@ -189,8 +191,28 @@ export function PersonEditPage({ id }: { id: string }) {
         </fieldset>
 
         <fieldset className="card">
+          <legend>Absences</legend>
+          <p className="muted">Vacation, sick leave and other days away, in {draft.timeZone.replace(/_/g, " ")} dates. Nothing is matched on these days.</p>
+          {absences.length > 0 ? (
+            <ul className="plain-list">
+              {absences.map((a) => (
+                <li key={a.id}>
+                  <AbsenceLine absence={a} />
+                  <button type="button" className="link" onClick={() => set({ absences: draft.absences.filter((x) => x.id !== a.id) })}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">None.</p>
+          )}
+          <AbsenceForm timeZone={draft.timeZone} onAdd={(a) => set({ absences: [...draft.absences, a] })} />
+        </fieldset>
+
+        <fieldset className="card">
           <legend>Exceptions</legend>
-          <p className="muted">One-off changes: a day off, an extra evening, a candidate's answer.</p>
+          <p className="muted">One-off changes: an extra evening, a busy afternoon, a candidate's answer.</p>
           {exceptions.length > 0 ? (
             <ul className="plain-list">
               {exceptions.map((x) => (
@@ -222,7 +244,7 @@ export function PersonEditPage({ id }: { id: string }) {
               <input type="file" accept=".ics,text/calendar" onChange={(e) => void onIcs(e.target.files?.[0])} />
             </label>
             {draft.busy.length > 0 && (
-              <button type="button" onClick={() => (set({ busy: [] }), setIcsNote(null))}>
+              <button type="button" onClick={() => (set({ busy: [], absences: [] }), setIcsNote(null))}>
                 Clear {draft.busy.length} imported events
               </button>
             )}

@@ -15,6 +15,7 @@ function person(over: Partial<Person> = {}): Person {
     weekly: [],
     exceptions: [],
     busy: [],
+    absences: [],
     ...over,
   };
 }
@@ -111,6 +112,19 @@ describe("expandPerson", () => {
     expect(show(r.busy)).toEqual(["09:45-10:45", "13:00-14:00", "14:45-15:45"]);
     expect(show(r.available)).toEqual(["09:00-09:45", "10:45-13:00", "14:00-14:45", "15:45-17:00", "18:00-19:00"]);
     expect(show(r.preferred)).toEqual(["12:00-13:00", "14:00-14:45", "15:45-17:00"]);
+  });
+
+  test("absences block whole and half days, without the buffer", () => {
+    const p = person({
+      timeZone: "UTC",
+      weekly: [0, 1, 2].map((day) => ({ day: day as 0 | 1 | 2, startMin: 540, endMin: 1020, level: "available" as const })),
+      exceptions: [{ id: "x", start: utc("2026-10-13T18:00:00Z"), end: utc("2026-10-13T19:00:00Z"), kind: "available" }],
+      absences: [{ id: "a", kind: "vacation", from: "2026-10-13", to: "2026-10-14", toAm: true }],
+    });
+    const r = expandPerson(p, { start: utc("2026-10-12T00:00:00Z"), end: utc("2026-10-15T00:00:00Z") }, { bufferMin: 30 });
+    const show = (l: { start: number; end: number }[]) => l.map((i) => `${iso(i.start).slice(8, 16)}-${iso(i.end).slice(11, 16)}`);
+    expect(show(r.busy)).toEqual(["13T00:00-12:00"]);
+    expect(show(r.available)).toEqual(["12T09:00-17:00", "14T12:00-17:00"]);
   });
 
   test("result is clipped to the range", () => {

@@ -16,6 +16,7 @@ const person = (id: string, weekly: WeeklyBlock[], tags: string[] = [], kind: Pe
   weekly,
   exceptions: [],
   busy: [],
+  absences: [],
 });
 const candidate = (id: string, weekly: WeeklyBlock[]) => person(id, weekly, ["candidate"], "external");
 

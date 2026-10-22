@@ -1,4 +1,5 @@
-import { isValidTimeZone, zonedTime } from "./expand";
+import { ABSENCE_LABELS, addDays } from "./calendar";
+import { absenceInterval, isValidTimeZone, zonedTime } from "./expand";
 import { DAY, type BusyEvent, type Interval, type Meeting, type Ms, type Person } from "./model";
 
 /*
@@ -357,6 +358,8 @@ export interface ExportOptions {
   /** DTSTAMP value. Defaults to now. */
   now?: Ms;
   calendarName?: string;
+  /** Also write every person's absences: whole days as all-day events, half days as timed ones. */
+  absences?: boolean;
 }
 
 export function exportIcs(meetings: readonly Meeting[], people: readonly Person[], opts: ExportOptions = {}): string {
@@ -381,6 +384,20 @@ export function exportIcs(meetings: readonly Meeting[], people: readonly Person[
       if (p.email) lines.push(`ATTENDEE;CN="${cn}";ROLE=REQ-PARTICIPANT:mailto:${p.email}`);
     }
     lines.push("END:VEVENT");
+  }
+  for (const p of opts.absences ? people : []) {
+    for (const a of p.absences) {
+      lines.push("BEGIN:VEVENT", `UID:${a.id}@slotmatch`, `DTSTAMP:${stamp}`);
+      if (a.fromPm || a.toAm) {
+        const iv = absenceInterval(a, p.timeZone);
+        lines.push(`DTSTART:${utcStamp(iv.start)}`, `DTEND:${utcStamp(iv.end)}`);
+      } else {
+        lines.push(`DTSTART;VALUE=DATE:${a.from.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${addDays(a.to, 1).replace(/-/g, "")}`);
+      }
+      lines.push(`SUMMARY:${escapeText(`${p.name}: ${ABSENCE_LABELS[a.kind]}`)}`, "TRANSP:OPAQUE");
+      if (a.note) lines.push(`DESCRIPTION:${escapeText(a.note)}`);
+      lines.push("END:VEVENT");
+    }
   }
   lines.push("END:VCALENDAR");
   return lines.map(foldLine).join("\r\n") + "\r\n";

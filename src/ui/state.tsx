@@ -121,7 +121,12 @@ export const tzAbbr = (ms: Ms, tz: string) =>
 /** "2026-10-19" in a zone, for <input type=date>. */
 export const isoDate = (ms: Ms, tz: string) => formatter(tz, { year: "numeric", month: "2-digit", day: "2-digit" }).format(ms).split("/").reverse().join("-");
 
-export const fmtDuration = (min: number) => (min < 60 ? `${min} min` : min % 60 ? `${Math.floor(min / 60)} h ${min % 60}` : `${min / 60} h`);
+/** "Mon 19 Oct" for a calendar date "2026-10-19". */
+export const fmtDate = (date: string) => fmtDay(Date.parse(`${date}T12:00:00Z`), "UTC");
+/** "October 2026", `month` 0-based. */
+export const fmtMonth = (year: number, month: number) => formatter("UTC", { month: "long", year: "numeric" }).format(Date.UTC(year, month, 1));
+
+export const fmtDuration =(min: number) => (min < 60 ? `${min} min` : min % 60 ? `${Math.floor(min / 60)} h ${min % 60}` : `${min / 60} h`);
 
 /* ---------- browser helpers ---------- */
 

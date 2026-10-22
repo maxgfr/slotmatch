@@ -1,7 +1,8 @@
-import { isValidTimeZone } from "./expand";
+import { isDate, validAbsence } from "./calendar";
+import { absenceInterval, isValidTimeZone } from "./expand";
 import { normalize } from "./intervals";
-import { MINUTE, type AvailabilityException, type Interval, type Person } from "./model";
-import { newId } from "./store";
+import { MINUTE, type Absence, type AvailabilityException, type Interval, type Meeting, type Ms, type Person } from "./model";
+import { newId, type AppState } from "./store";
 
 /*
  * Share links carry their data in the URL hash: JSON → deflate-raw → base64url.
@@ -32,6 +33,33 @@ export interface ShareResponse {
   preferred: Interval[];
   /** Title of the request being answered. */
   title?: string;
+}
+
+/** A read-only team calendar: absences and meetings, never weekly hours or calendar imports. */
+export interface ShareCalendar {
+  title: string;
+  /** The sender's display zone. */
+  timeZone: string;
+  range: Interval;
+  people: SharedPerson[];
+  meetings: SharedMeeting[];
+}
+
+export interface SharedPerson {
+  name: string;
+  email?: string;
+  tags: string[];
+  timeZone: string;
+  absences: Absence[];
+}
+
+export interface SharedMeeting {
+  id: string;
+  title: string;
+  start: Ms;
+  end: Ms;
+  /** Indexes into `ShareCalendar.people`. */
+  attendees: number[];
 }
 
 export type ShareErrorCode = "malformed" | "version" | "kind";
@@ -234,10 +262,184 @@ export async function decodeResponse(text: string): Promise<ShareResponse> {
   };
 }
 
+/* ---------- calendar ---------- */
+
+const overlaps = (a: Interval, b: Interval) => a.start < b.end && b.start < a.end;
+
+/**
+ * The part of the team calendar inside `range`: people appear only when they
+ * have an absence or a meeting there.
+ */
+export function buildCalendar(people: readonly Person[], meetings: readonly Meeting[], range: Interval, title: string, timeZone: string): ShareCalendar {
+  const inRange = meetings.filter((m) => overlaps(m, range));
+  const attending = new Set(inRange.flatMap((m) => m.attendeeIds));
+  const shared: SharedPerson[] = [];
+  const index = new Map<string, number>();
+  for (const p of people) {
+    const absences = p.absences.filter((a) => overlaps(absenceInterval(a, p.timeZone), range));
+    if (!absences.length && !attending.has(p.id)) continue;
+    index.set(p.id, shared.length);
+    shared.push({ name: p.name, ...(p.email ? { email: p.email } : {}), tags: p.tags, timeZone: p.timeZone, absences });
+  }
+  return {
+    title,
+    timeZone,
+    range,
+    people: shared,
+    meetings: inRange.map((m) => ({
+      id: m.id,
+      title: m.title,
+      start: m.start,
+      end: m.end,
+      attendees: m.attendeeIds.map((id) => index.get(id)).filter((i): i is number => i !== undefined),
+    })),
+  };
+}
+
+const ABSENCE_KINDS: readonly Absence["kind"][] = ["vacation", "sick", "other"];
+
+export async function encodeCalendar(cal: ShareCalendar): Promise<string> {
+  const s = Math.floor(cal.range.start / MINUTE);
+  const base = s * MINUTE;
+  return pack({
+    v: SHARE_VERSION,
+    k: "c",
+    t: cal.title,
+    z: cal.timeZone,
+    s,
+    l: Math.round((cal.range.end - base) / MINUTE),
+    // [name, email, tags, zone, [[id, kind, from, to, flags (1 = from pm, 2 = to am), note?]]]
+    p: cal.people.map((p) => [
+      p.name,
+      p.email ?? "",
+      p.tags,
+      p.timeZone,
+      p.absences.map((a) => [a.id, a.kind, a.from, a.to, (a.fromPm ? 1 : 0) | (a.toAm ? 2 : 0), ...(a.note ? [a.note] : [])]),
+    ]),
+    // [id, title, start minutes from range start (may be negative), length, attendee indexes]
+    m: cal.meetings.map((m) => [m.id, m.title, Math.round((m.start - base) / MINUTE), Math.round((m.end - m.start) / MINUTE), m.attendees]),
+  });
+}
+
+const list = (v: unknown, max: number): v is unknown[] => Array.isArray(v) && v.length <= max;
+
+function sharedAbsence(v: unknown): Absence {
+  if (!list(v, 6) || v.length < 5) fail("absence");
+  const [id, k, from, to, flags, note] = v;
+  if (!str(id, 64) || !ABSENCE_KINDS.includes(k as Absence["kind"]) || !isDate(from) || !isDate(to)) fail("absence");
+  if (!int(flags) || flags < 0 || flags > 3 || (note !== undefined && !str(note))) fail("absence");
+  const a: Absence = {
+    id,
+    kind: k as Absence["kind"],
+    from,
+    to,
+    ...(flags & 1 ? { fromPm: true } : {}),
+    ...(flags & 2 ? { toAm: true } : {}),
+    ...(note ? { note } : {}),
+  };
+  if (!validAbsence(a)) fail("absence");
+  return a;
+}
+
+function sharedPerson(v: unknown): SharedPerson {
+  if (!list(v, 5) || v.length !== 5) fail("person");
+  const [name, email, tags, tz, absences] = v;
+  if (!str(name) || name.trim() === "" || !str(email) || !list(tags, 50) || !tags.every((t) => str(t, 50))) fail("person");
+  if (!zone(tz)) fail("time zone");
+  if (!list(absences, 1000)) fail("absence list");
+  return { name, ...(email ? { email } : {}), tags: tags as string[], timeZone: tz, absences: absences.map(sharedAbsence) };
+}
+
+export async function decodeCalendar(text: string): Promise<ShareCalendar> {
+  const o = await unpack(text);
+  kind(o, "c", "calendar");
+  if (!str(o.t)) fail("title");
+  if (!zone(o.z)) fail("time zone");
+  if (!int(o.s) || !int(o.l) || o.l <= 0) fail("range");
+  if (!list(o.p, 500) || !list(o.m, 5000)) fail("calendar");
+  const base = o.s * MINUTE;
+  const people = o.p.map(sharedPerson);
+  const meetings = o.m.map((v): SharedMeeting => {
+    if (!list(v, 5) || v.length !== 5) fail("meeting");
+    const [id, title, start, len, attendees] = v;
+    if (!str(id, 64) || !str(title) || !int(start) || !int(len) || len <= 0) fail("meeting");
+    if (!list(attendees, 500) || !attendees.every((i) => int(i) && i >= 0 && i < people.length)) fail("meeting");
+    return { id, title, start: base + start * MINUTE, end: base + (start + len) * MINUTE, attendees: attendees as number[] };
+  });
+  return { title: o.t, timeZone: o.z, range: { start: base, end: base + o.l * MINUTE }, people, meetings };
+}
+
+export interface CalendarImport {
+  state: AppState;
+  /** People created because nobody matched them by email or name. */
+  newPeople: number;
+  /** Absences and meetings added or changed. */
+  absences: number;
+  meetings: number;
+}
+
+/**
+ * Merge a shared calendar into local data. People are matched by email, then
+ * by name; absences and meetings are upserted by id, so importing the same
+ * link twice changes nothing.
+ */
+export function applyCalendar(state: AppState, cal: ShareCalendar, now: Ms): CalendarImport {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const people = [...state.people];
+  let newPeople = 0;
+  let absences = 0;
+  const localIds = cal.people.map((sp) => {
+    let i = sp.email ? people.findIndex((p) => p.email && norm(p.email) === norm(sp.email!)) : -1;
+    if (i < 0) i = people.findIndex((p) => norm(p.name) === norm(sp.name));
+    if (i < 0) {
+      newPeople++;
+      i = people.push({
+        id: newId(),
+        name: sp.name,
+        ...(sp.email ? { email: sp.email } : {}),
+        kind: "member",
+        tags: sp.tags,
+        timeZone: sp.timeZone,
+        weekly: [],
+        exceptions: [],
+        busy: [],
+        absences: [],
+      }) - 1;
+    }
+    const person = people[i]!;
+    const byId = new Map(person.absences.map((a) => [a.id, a]));
+    for (const a of sp.absences) {
+      if (JSON.stringify(byId.get(a.id)) === JSON.stringify(a)) continue;
+      byId.set(a.id, a);
+      absences++;
+    }
+    people[i] = { ...person, absences: [...byId.values()] };
+    return person.id;
+  });
+
+  const meetings = new Map(state.meetings.map((m) => [m.id, m]));
+  let changed = 0;
+  for (const sm of cal.meetings) {
+    const old = meetings.get(sm.id);
+    const m: Meeting = {
+      id: sm.id,
+      title: sm.title,
+      start: sm.start,
+      end: sm.end,
+      attendeeIds: [...new Set(sm.attendees.map((i) => localIds[i]!))],
+      createdAt: old?.createdAt ?? now,
+    };
+    if (old && JSON.stringify(old) === JSON.stringify(m)) continue;
+    meetings.set(m.id, m);
+    changed++;
+  }
+  return { state: { ...state, people, meetings: [...meetings.values()] }, newPeople, absences, meetings: changed };
+}
+
 /* ---------- URLs ---------- */
 
 /** `base` is the app URL without hash, e.g. `https://example.com/slotmatch/`. */
-export function shareUrl(base: string, route: "respond" | "import", data: string): string {
+export function shareUrl(base: string, route: "respond" | "import" | "calendar-view", data: string): string {
   return `${base.replace(/#.*$/, "")}#/${route}?d=${data}`;
 }
 

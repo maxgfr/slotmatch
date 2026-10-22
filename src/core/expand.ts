@@ -3,6 +3,7 @@ import { clip, intersect, normalize, subtract, union } from "./intervals";
 import {
   DAY,
   MINUTE,
+  type Absence,
   type Expanded,
   type Interval,
   type Meeting,
@@ -80,6 +81,16 @@ export function isValidTimeZone(timeZone: string): boolean {
   }
 }
 
+/** Instants covered by an absence: local midnight (or noon) to midnight (or noon). */
+export function absenceInterval(a: Absence, timeZone: string): Interval {
+  const [fy, fm, fd] = a.from.split("-").map(Number) as [number, number, number];
+  const [ty, tm, td] = a.to.split("-").map(Number) as [number, number, number];
+  return {
+    start: zonedTime(fy, fm - 1, fd, a.fromPm ? 720 : 0, timeZone),
+    end: zonedTime(ty, tm - 1, td, a.toAm ? 720 : 1440, timeZone),
+  };
+}
+
 /* ---------- expansion ---------- */
 
 export interface ExpandOptions {
@@ -95,7 +106,7 @@ export interface ExpandOptions {
  *
  * available = (weekly ∪ available exceptions) − busy
  * preferred = (weekly preferred ∪ preferred exceptions) ∩ available
- * busy      = busy exceptions ∪ imported events ∪ meetings (each widened by the buffer)
+ * busy      = busy exceptions ∪ absences ∪ imported events ∪ meetings (the last two widened by the buffer)
  */
 export function expandPerson(person: Person, range: Interval, opts: ExpandOptions = {}): Expanded {
   const tz = person.timeZone;
@@ -129,6 +140,7 @@ export function expandPerson(person: Person, range: Interval, opts: ExpandOption
       if (ex.kind === "preferred") extraPref.push(ex);
     }
   }
+  for (const a of person.absences) busyRaw.push(absenceInterval(a, tz));
   for (const ev of person.busy) busyRaw.push(widen(ev));
   for (const m of opts.meetings ?? []) {
     if (m.attendeeIds.includes(person.id)) busyRaw.push(widen(m));

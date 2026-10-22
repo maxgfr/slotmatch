@@ -46,6 +46,26 @@ export interface BusyEvent {
   title?: string;
 }
 
+export type AbsenceKind = "vacation" | "sick" | "other";
+
+/**
+ * Whole or half days away, as local dates in the person's zone so a day off
+ * stays a calendar day across DST. Noon is the half-day boundary.
+ */
+export interface Absence {
+  id: string;
+  kind: AbsenceKind;
+  /** First day, `YYYY-MM-DD`. */
+  from: string;
+  /** Last day, inclusive. */
+  to: string;
+  /** Starts at noon on `from` (afternoon only). */
+  fromPm?: boolean;
+  /** Ends at noon on `to` (morning only). */
+  toAm?: boolean;
+  note?: string;
+}
+
 export type PersonKind = "member" | "external";
 
 export interface Person {
@@ -60,6 +80,7 @@ export interface Person {
   weekly: WeeklyBlock[];
   exceptions: AvailabilityException[];
   busy: BusyEvent[];
+  absences: Absence[];
 }
 
 export interface Meeting {

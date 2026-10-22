@@ -22,6 +22,7 @@ const person = (id: string, weekly: WeeklyBlock[], tags: string[] = []): Person 
   weekly,
   exceptions: [],
   busy: [],
+  absences: [],
 });
 const meeting = (id: string, iso: string, attendeeIds: string[]): Meeting => ({
   id,

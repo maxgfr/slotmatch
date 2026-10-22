@@ -200,8 +200,8 @@ describe("parseIcs — edge cases", () => {
 
 describe("exportIcs", () => {
   const people: Person[] = [
-    { id: "a", name: "Zoë Lefèvre-Dupont", email: "zoe@example.com", kind: "member", tags: [], timeZone: "Europe/Paris", weekly: [], exceptions: [], busy: [] },
-    { id: "b", name: "Sam, candidate", kind: "external", tags: [], timeZone: "UTC", weekly: [], exceptions: [], busy: [] },
+    { id: "a", name: "Zoë Lefèvre-Dupont", email: "zoe@example.com", kind: "member", tags: [], timeZone: "Europe/Paris", weekly: [], exceptions: [], busy: [], absences: [] },
+    { id: "b", name: "Sam, candidate", kind: "external", tags: [], timeZone: "UTC", weekly: [], exceptions: [], busy: [], absences: [] },
   ];
   const meetings: Meeting[] = [
     {
@@ -234,6 +234,28 @@ describe("exportIcs", () => {
   test("round-trips through the parser", () => {
     const r = parseIcs(text, { range: OCTOBER, defaultTimeZone: "UTC" });
     expect(r.events).toEqual([{ start: meetings[0]!.start, end: meetings[0]!.end, title: meetings[0]!.title }]);
+  });
+
+  test("absences: all-day events for whole days, timed events for half days", () => {
+    const away = people.map((p, i) => ({
+      ...p,
+      absences: [
+        i === 0
+          ? { id: "v", kind: "vacation" as const, from: "2026-10-19", to: "2026-10-23", note: "Lisbon" }
+          : { id: "h", kind: "other" as const, from: "2026-10-14", to: "2026-10-14", fromPm: true },
+      ],
+    }));
+    expect(exportIcs([], away, { now: 0 })).not.toContain("UID:v@slotmatch");
+    const out = exportIcs([], away, { now: 0, absences: true }).replace(/\r\n /g, "");
+    expect(out).toContain("UID:v@slotmatch\r\nDTSTAMP:19700101T000000Z\r\nDTSTART;VALUE=DATE:20261019\r\nDTEND;VALUE=DATE:20261024\r\n");
+    expect(out).toContain("SUMMARY:Zoë Lefèvre-Dupont: Vacation\r\nTRANSP:OPAQUE\r\nDESCRIPTION:Lisbon\r\n");
+    expect(out).toContain("DTSTART:20261014T120000Z\r\nDTEND:20261015T000000Z\r\nSUMMARY:Sam\\, candidate: Absence\r\n");
+    // Read back as busy time: all-day dates in the default zone.
+    const r = parseIcs(out, { range: OCTOBER, defaultTimeZone: "Europe/Paris" });
+    expect(r.events.map((e) => [new Date(e.start).toISOString(), new Date(e.end).toISOString()])).toEqual([
+      ["2026-10-14T12:00:00.000Z", "2026-10-15T00:00:00.000Z"],
+      ["2026-10-18T22:00:00.000Z", "2026-10-23T22:00:00.000Z"],
+    ]);
   });
 
   test("foldLine never splits a multi-byte character", () => {

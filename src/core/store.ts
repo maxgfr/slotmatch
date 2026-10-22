@@ -1,5 +1,7 @@
+import { toDate, validAbsence } from "./calendar";
 import { isValidTimeZone, localParts, zonedTime } from "./expand";
 import {
+  type Absence,
   type AvailabilityException,
   type BusyEvent,
   type Meeting,
@@ -69,6 +71,20 @@ function busyEvent(v: unknown): BusyEvent | null {
   return { start: v.start, end: v.end, ...(isStr(v.title) ? { title: v.title } : {}) };
 }
 
+function absence(v: unknown): Absence | null {
+  if (!isObj(v) || !isStr(v.from) || !isStr(v.to)) return null;
+  const a: Absence = {
+    id: isStr(v.id) ? v.id : newId(),
+    kind: v.kind === "vacation" || v.kind === "sick" ? v.kind : "other",
+    from: v.from,
+    to: v.to,
+    ...(v.fromPm === true ? { fromPm: true } : {}),
+    ...(v.toAm === true ? { toAm: true } : {}),
+    ...(isStr(v.note) && v.note ? { note: v.note } : {}),
+  };
+  return validAbsence(a) ? a : null;
+}
+
 const present = <T>(x: T | null): x is T => x !== null;
 
 function person(v: unknown): Person | null {
@@ -83,6 +99,7 @@ function person(v: unknown): Person | null {
     weekly: arr(v.weekly).map(block).filter(present),
     exceptions: arr(v.exceptions).map(exception).filter(present),
     busy: arr(v.busy).map(busyEvent).filter(present),
+    absences: arr(v.absences).map(absence).filter(present),
   };
 }
 
@@ -116,7 +133,7 @@ function settings(v: unknown, fallback: Settings): Settings {
  * read. Returns null when the input is not slotmatch data at all.
  *
  * - v0 (no `version`): `{ people, meetings }` without settings.
- * - v1: current.
+ * - v1: current. `absences` was added later and defaults to none.
  */
 export function migrate(raw: unknown, fallbackTz = "UTC"): AppState | null {
   if (!isObj(raw)) return null;
@@ -247,6 +264,7 @@ export function demoState(now: Ms, timeZone = "Europe/Paris"): AppState {
     weekly,
     exceptions: [],
     busy: [],
+    absences: [],
   });
   const people: Person[] = [
     member("demo-alice", "Alice Martin", ["engineering", "backend"], "Europe/Paris", [
@@ -268,6 +286,15 @@ export function demoState(now: Ms, timeZone = "Europe/Paris"): AppState {
   const alice = people[0]!;
   const sprint = workday(now, alice.timeZone, 1, 10, 11);
   alice.exceptions.push({ id: "demo-alice-sprint", ...sprint, kind: "busy", note: "Sprint review" });
+  // Bruno is off all next week; Dana takes the afternoon of the third working day off.
+  const bruno = people[1]!;
+  const t = localParts(now, bruno.timeZone);
+  const monday = t.day - t.weekday + 7;
+  bruno.absences.push({ id: "demo-bruno-vacation", kind: "vacation", from: toDate(t.year, t.month, monday), to: toDate(t.year, t.month, monday + 4) });
+  const dana = people[3]!;
+  const d = localParts(workday(now, dana.timeZone, 2, 12, 13).start, dana.timeZone);
+  const date = toDate(d.year, d.month, d.day);
+  dana.absences.push({ id: "demo-dana-dentist", kind: "other", from: date, to: date, fromPm: true, note: "Dentist" });
 
   const candidate = (id: string, name: string, tz: string, slots: [number, number, number, ("available" | "preferred")?][], email?: string): Person => ({
     id,
@@ -279,6 +306,7 @@ export function demoState(now: Ms, timeZone = "Europe/Paris"): AppState {
     weekly: [],
     exceptions: slots.map(([day, a, b, kind], i) => ({ id: `${id}-${i}`, ...workday(now, tz, day, a, b), kind: kind ?? "available" })),
     busy: [],
+    absences: [],
   });
   people.push(
     candidate("demo-gabriel", "Gabriel Silva", "America/Sao_Paulo", [

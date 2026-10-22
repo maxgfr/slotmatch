@@ -21,6 +21,7 @@ const person = (id: string, weekly: WeeklyBlock[], tags: string[] = []): Person 
   weekly,
   exceptions: [],
   busy: [],
+  absences: [],
 });
 
 const team = [

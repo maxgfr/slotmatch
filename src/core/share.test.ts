@@ -1,18 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import type { Person } from "./model";
+import type { Meeting, Person } from "./model";
 import {
+  applyCalendar,
   applyResponse,
+  buildCalendar,
+  decodeCalendar,
   decodeRequest,
   decodeResponse,
+  encodeCalendar,
   encodeRequest,
   encodeResponse,
   fromDeltas,
   ShareError,
   shareUrl,
   toDeltas,
+  type ShareCalendar,
   type ShareRequest,
   type ShareResponse,
 } from "./share";
+import { emptyState } from "./store";
 
 const utc = (iso: string) => Date.parse(iso);
 const H = 3_600_000;
@@ -148,6 +154,7 @@ describe("applyResponse", () => {
       { id: "busy-in", start: RANGE.start + 5 * H, end: RANGE.start + 6 * H, kind: "busy" },
     ],
     busy: [],
+    absences: [],
   };
   const answer: ShareResponse = {
     name: "Bob",
@@ -172,5 +179,71 @@ describe("applyResponse", () => {
     expect(ids).not.toContain("old-in");
     const kinds = applyResponse(bob, answer).exceptions.filter((x) => x.note === "From response link").map((x) => x.kind);
     expect(kinds).toEqual(["available", "preferred"]);
+  });
+});
+
+describe("calendar link", () => {
+  const person = (id: string, over: Partial<Person> = {}): Person => ({
+    id,
+    name: id,
+    kind: "member",
+    tags: ["team"],
+    timeZone: "Europe/Paris",
+    weekly: [{ day: 0, startMin: 540, endMin: 1020, level: "available" }],
+    exceptions: [{ id: `${id}-x`, start: RANGE.start, end: RANGE.start + H, kind: "busy" }],
+    busy: [{ start: RANGE.start, end: RANGE.start + H, title: "Private" }],
+    absences: [],
+    ...over,
+  });
+  const ana = person("Ana", {
+    email: "ana@example.com",
+    absences: [
+      { id: "in", kind: "vacation", from: "2026-10-14", to: "2026-10-16", fromPm: true, note: "Trip" },
+      { id: "out", kind: "sick", from: "2026-11-02", to: "2026-11-02" },
+    ],
+  });
+  const ben = person("Ben");
+  const cyd = person("Cyd");
+  const meetings: Meeting[] = [
+    { id: "m1", title: "Sync", start: RANGE.start - H, end: RANGE.start + H, attendeeIds: ["Ben", "gone"], createdAt: 5 },
+    { id: "m2", title: "Later", start: RANGE.end + H, end: RANGE.end + 2 * H, attendeeIds: ["Cyd"], createdAt: 5 },
+  ];
+  const cal = buildCalendar([ana, ben, cyd], meetings, RANGE, "Team", "Europe/Paris");
+
+  test("only shares absences and meetings inside the range", () => {
+    expect(cal.people.map((p) => p.name)).toEqual(["Ana", "Ben"]);
+    expect(cal.people[0]!.absences.map((a) => a.id)).toEqual(["in"]);
+    expect(cal.meetings).toEqual([{ id: "m1", title: "Sync", start: RANGE.start - H, end: RANGE.start + H, attendees: [1] }]);
+    expect(JSON.stringify(cal)).not.toContain("Private");
+    expect(JSON.stringify(cal)).not.toContain("weekly");
+  });
+
+  test("round-trip", async () => {
+    const d = await encodeCalendar(cal);
+    expect(await decodeCalendar(d)).toEqual(cal);
+    expect(shareUrl("https://x.dev/app/", "calendar-view", d)).toBe(`https://x.dev/app/#/calendar-view?d=${d}`);
+  });
+
+  test("rejects other kinds and broken content", async () => {
+    const req = await encodeRequest({ title: "x", range: RANGE, durationMin: 30, timeZone: "UTC" });
+    expect((await rejects(decodeCalendar(req))).code).toBe("kind");
+    const badIndex: ShareCalendar = { ...cal, meetings: [{ ...cal.meetings[0]!, attendees: [7] }] };
+    expect((await rejects(decodeCalendar(await encodeCalendar(badIndex)))).message).toContain("meeting");
+    const badDate: ShareCalendar = { ...cal, people: [{ ...cal.people[0]!, absences: [{ id: "z", kind: "other", from: "2026-02-30", to: "2026-03-01" }] }] };
+    expect((await rejects(decodeCalendar(await encodeCalendar(badDate)))).message).toContain("absence");
+  });
+
+  test("applyCalendar matches people, creates the rest, and is idempotent", () => {
+    const base = { ...emptyState("UTC"), people: [person("local-ana", { name: "ANA", email: "Ana@Example.com" })] };
+    const first = applyCalendar(base, cal, 42);
+    expect([first.newPeople, first.absences, first.meetings]).toEqual([1, 1, 1]);
+    expect(first.state.people.map((p) => p.name)).toEqual(["ANA", "Ben"]);
+    expect(first.state.people[0]!.absences.map((a) => a.id)).toEqual(["in"]);
+    const newBen = first.state.people[1]!;
+    expect(newBen).toMatchObject({ kind: "member", weekly: [], exceptions: [], busy: [], tags: ["team"] });
+    expect(first.state.meetings).toEqual([{ ...meetings[0]!, attendeeIds: [newBen.id], createdAt: 42 }]);
+    const again = applyCalendar(first.state, cal, 99);
+    expect([again.newPeople, again.absences, again.meetings]).toEqual([0, 0, 0]);
+    expect(again.state).toEqual(first.state);
   });
 });

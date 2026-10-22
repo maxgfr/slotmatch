@@ -92,9 +92,31 @@ describe("migrate", () => {
     expect(s.version).toBe(1);
     expect(s.settings.timeZone).toBe("Europe/Paris");
     expect(s.people).toEqual([
-      { id: "a", name: "A", kind: "member", tags: ["x"], timeZone: "UTC", weekly: [{ day: 0, startMin: 540, endMin: 600, level: "available" }], exceptions: [], busy: [] },
+      { id: "a", name: "A", kind: "member", tags: ["x"], timeZone: "UTC", weekly: [{ day: 0, startMin: 540, endMin: 600, level: "available" }], exceptions: [], busy: [], absences: [] },
     ]);
     expect(s.meetings).toEqual([{ id: "m", title: "", start: 1, end: 2, attendeeIds: ["a"], createdAt: 0 }]);
+  });
+  test("keeps valid absences and drops broken ones", () => {
+    const s = migrate({
+      version: 1,
+      people: [
+        {
+          id: "a",
+          name: "A",
+          absences: [
+            { id: "ok", kind: "sick", from: "2026-10-12", to: "2026-10-13", toAm: true, fromPm: "yes" },
+            { kind: "nope", from: "2026-10-20", to: "2026-10-20" },
+            { id: "reversed", from: "2026-10-13", to: "2026-10-12" },
+            { id: "impossible", from: "2026-02-30", to: "2026-03-01" },
+            { id: "both-halves", from: "2026-10-12", to: "2026-10-12", fromPm: true, toAm: true },
+          ],
+        },
+      ],
+    })!;
+    const [ok, other, ...rest] = s.people[0]!.absences;
+    expect(ok).toEqual({ id: "ok", kind: "sick", from: "2026-10-12", to: "2026-10-13", toAm: true });
+    expect(other).toMatchObject({ kind: "other", from: "2026-10-20" });
+    expect(rest).toEqual([]);
   });
   test("rejects non-slotmatch data", () => {
     expect(migrate(42)).toBeNull();

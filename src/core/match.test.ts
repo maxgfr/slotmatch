@@ -13,7 +13,7 @@ function mon(startH: number, endH: number, level: WeeklyBlock["level"] = "availa
 }
 
 function person(id: string, weekly: WeeklyBlock[], tags: string[] = [], timeZone = "UTC"): Person {
-  return { id, name: id, kind: "member", tags, timeZone, weekly, exceptions: [], busy: [] };
+  return { id, name: id, kind: "member", tags, timeZone, weekly, exceptions: [], busy: [], absences: [] };
 }
 
 function query(over: Partial<MatchQuery>): MatchQuery {
